@@ -1,26 +1,38 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const incidentSchema = new mongoose.Schema({
-    type: { type: String, required: true },
+    // --- CITIZEN REPORTING DATA ---
+    type: { 
+        type: String, 
+        required: true,
+        enum: ['Fire', 'Accident', 'Medical', 'Public Safety'] 
+    },
     description: { type: String },
     location: {
         lat: { type: Number, required: true },
-        lng: { type: Number, required: true }
+        lng: { type: Number, required: true },
+        address: { type: String }
     },
-    status: { 
-        type: String, 
-        enum: ['unverified', 'verified', 'resolved'], 
-        default: 'unverified' 
+    mediaUrl: { type: String, default: null },
+
+    // --- ADMIN & LIFECYCLE DATA ---
+    status: {
+        type: String,
+        enum: ['Unverified', 'Verified', 'Responding', 'On Scene', 'Resolved'],
+        default: 'Unverified'
     },
-    priority: { 
-        type: String, 
-        enum: ['low', 'medium', 'high'], 
-        default: 'medium' 
+    severity: {
+        type: String,
+        enum: ['Low', 'Medium', 'High'],
+        default: 'Medium'
     },
-    // Compulsory Upvote System for Verification
-    upvotes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    adminNotes: { type: String, default: "" },
+
+    // --- VERIFICATION SYSTEM ---
+    upvotes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], 
     voteCount: { type: Number, default: 0 },
+    
     reportedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Incident', incidentSchema);
+export default mongoose.model('Incident', incidentSchema);
