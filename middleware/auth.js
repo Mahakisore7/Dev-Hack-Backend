@@ -26,3 +26,12 @@ export const protectRoute = async (req, res, next) => {
         res.status(500).json({ success: false, message: "Invalid Token" });
     }
 };
+
+// NEW: Check if the user is an Admin or Responder
+export const verifyAdmin = (req, res, next) => {
+    if (req.user && (req.user.role === 'admin' || req.user.role === 'responder')) {
+        next(); // They are allowed, proceed!
+    } else {
+        res.status(403).json({ success: false, message: "Access Denied: Admins Only" });
+    }
+};
