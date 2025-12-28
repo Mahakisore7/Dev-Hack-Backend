@@ -3,25 +3,69 @@ import Incident from "../models/Incident.js";
 // ==========================================
 // 1. GET ADMIN FEED (Handles Home & Tabs)
 // ==========================================
+// export const getAdminFeed = async (req, res) => {
+//     try {
+//         const { status, type } = req.query;
+//         let filter = {};
+
+//         // 🟢 LOGIC: 
+//         // If status is "All", we want everything (empty filter).
+//         // If status is "Unverified", "Resolved", etc., we filter by that specific status.
+//         if (status && status !== "All") {
+//             filter.status = status;
+//         }
+
+//         // Optional: Filter by Type (Fire, Medical) if needed later
+//         if (type) filter.type = type;
+
+//         const incidents = await Incident.aggregate([
+//             { $match: filter }, // Apply the filter (All vs Specific Status)
+//             {
+//                 $addFields: {
+//                     severityScore: {
+//                         $switch: {
+//                             branches: [
+//                                 { case: { $eq: ["$severity", "High"] }, then: 3 },
+//                                 { case: { $eq: ["$severity", "Medium"] }, then: 2 },
+//                                 { case: { $eq: ["$severity", "Low"] }, then: 1 }
+//                             ],
+//                             default: 0
+//                         }
+//                     }
+//                 }
+//             },
+//             // 🟢 SORTING ORDER:
+//             // 1. High Severity First
+//             // 2. High Vote Count Second
+//             // 3. Most Recently Created Third (Newest on top)
+//             { $sort: { severityScore: -1, voteCount: -1, createdAt: -1 } }
+//         ]);
+
+//         res.status(200).json({ success: true, count: incidents.length, data: incidents });
+
+//     } catch (error) {
+//         console.error("Admin Feed Error:", error.message);
+//         res.status(500).json({ success: false, message: "Server Error" });
+//     }
+// };
 export const getAdminFeed = async (req, res) => {
     try {
         const { status, type } = req.query;
         let filter = {};
 
-        // 🟢 LOGIC: 
-        // If status is "All", we want everything (empty filter).
-        // If status is "Unverified", "Resolved", etc., we filter by that specific status.
         if (status && status !== "All") {
             filter.status = status;
         }
 
-        // Optional: Filter by Type (Fire, Medical) if needed later
         if (type) filter.type = type;
 
         const incidents = await Incident.aggregate([
-            { $match: filter }, // Apply the filter (All vs Specific Status)
+            { $match: filter },
             {
                 $addFields: {
+                    // 🟢 Calculate counts for frontend safety
+                    upvoteCount: { $size: { $ifNull: ["$upvotes", []] } },
+                    downvoteCount: { $size: { $ifNull: ["$downvotes", []] } },
                     severityScore: {
                         $switch: {
                             branches: [
@@ -34,10 +78,6 @@ export const getAdminFeed = async (req, res) => {
                     }
                 }
             },
-            // 🟢 SORTING ORDER:
-            // 1. High Severity First
-            // 2. High Vote Count Second
-            // 3. Most Recently Created Third (Newest on top)
             { $sort: { severityScore: -1, voteCount: -1, createdAt: -1 } }
         ]);
 
