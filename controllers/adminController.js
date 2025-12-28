@@ -38,70 +38,60 @@ export const getAdminFeed = async (req, res) => {
     }
 };
 
-// 2. UPDATE STATUS (Command Center Action)
+// 2. UPDATE INCIDENT (Unified Status & Notes)
+// Handles "Mark as Resolved", "Reject", and "Add Note" all in one.
 export const updateIncidentStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { status } = req.body;
+        const { status, adminNotes } = req.body;
+
+        // Construct update object dynamically (only update what is sent)
+        const updates = {};
         
-        const validStatuses = ['Unverified', 'Verified', 'Responding', 'On Scene', 'Resolved'];
-
-        if (!validStatuses.includes(status)) {
-            return res.status(400).json({ success: false, message: "Invalid Status provided" });
+        // Validate Status if provided
+        if (status) {
+            const validStatuses = ['Unverified', 'Verified', 'Responding', 'On Scene', 'Resolved', 'Rejected'];
+            if (!validStatuses.includes(status)) {
+                return res.status(400).json({ success: false, message: "Invalid Status provided" });
+            }
+            updates.status = status;
         }
 
-        const incident = await Incident.findByIdAndUpdate(
+        // Add Notes if provided
+        if (adminNotes !== undefined) {
+            updates.adminNotes = adminNotes;
+        }
+
+        const updatedIncident = await Incident.findByIdAndUpdate(
             id,
-            { status: status },
-            { new: true } // Return updated doc
+            { $set: updates },
+            { new: true } // Return the updated document
         );
 
-        if (!incident) {
+        if (!updatedIncident) {
             return res.status(404).json({ success: false, message: "Incident not found" });
         }
 
-        // Notify Everyone (Real-time update)
+        // ⚡ Real-time update: Tell everyone (Dashboards & Mobile Apps)
         const io = req.app.get("socketio");
-        io.emit("incident-updated", incident);
+        io.emit("incident-updated", updatedIncident);
 
-        res.status(200).json({ success: true, message: "Status Updated", data: incident });
+        res.status(200).json({ success: true, message: "Incident Updated", data: updatedIncident });
 
     } catch (error) {
+        console.error("Update Error:", error.message);
         res.status(500).json({ success: false, message: "Server Error" });
     }
 };
 
-// 3. ADD ADMIN NOTES (Internal Communication)
-export const addAdminNote = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { adminNotes } = req.body;
-
-        const incident = await Incident.findByIdAndUpdate(
-            id,
-            { adminNotes: adminNotes },
-            { new: true }
-        );
-
-        if (!incident) {
-            return res.status(404).json({ success: false, message: "Incident not found" });
-        }
-
-        res.status(200).json({ success: true, message: "Note Added", data: incident });
-
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Server Error" });
-    }
-};
-
-// 4. SEED DATA (Utility for Testing)
+// 3. SEED DATA (Utility for Testing)
 export const seedIncidents = async (req, res) => {
     try {
         // Only run if we are the admin reporting
         await Incident.create([
-            { type: 'Fire', severity: 'High', location: { lat: 11.01, lng: 76.95, address: "Main Lab" }, description: "Lab fire", reportedBy: req.user._id },
-            { type: 'Accident', severity: 'Medium', location: { lat: 11.02, lng: 76.96, address: "Gate 1" }, description: "Bike crash", reportedBy: req.user._id },
-            { type: 'Public Safety', severity: 'Low', location: { lat: 11.03, lng: 76.97, address: "Hostel" }, description: "Street light broken", reportedBy: req.user._id }
+            { type: 'Fire', severity: 'High', location: { lat: 11.01, lng: 76.95, address: "Main Lab" }, description: "Lab fire", reportedBy: req.user._id, status: "Unverified" },
+            { type: 'Accident', severity: 'Medium', location: { lat: 11.02, lng: 76.96, address: "Gate 1" }, description: "Bike crash", reportedBy: req.user._id, status: "Unverified" },
+            { type: 'Public Safety', severity: 'Low', location: { lat: 11.03, lng: 76.97, address: "Hostel" }, description: "Street light broken", reportedBy: req.user._id, status: "Unverified" }
         ]);
         res.status(201).json({ success: true, message: "Test Incidents Created!" });
     } catch (error) {
@@ -109,21 +99,22 @@ export const seedIncidents = async (req, res) => {
     }
 };
 
-// 5. MERGE DUPLICATES (The "Winning Feature")
-// Merges Incident B (Duplicate) into Incident A (Primary)
+// 4. MERGE DUPLICATES (The "Winning Feature")
 export const mergeIncidents = async (req, res) => {
     try {
         const { primaryId, duplicateId } = req.body;
 
-        // 1. Get the duplicate incident to extract useful data
+        if (!primaryId || !duplicateId) {
+            return res.status(400).json({ success: false, message: "Both IDs required" });
+        }
+
+        // 1. Get duplicate data
         const duplicate = await Incident.findById(duplicateId);
         if (!duplicate) {
             return res.status(404).json({ success: false, message: "Duplicate incident not found" });
         }
 
-        // 2. Update Primary: 
-        // - Add +1 vote count (simulating the duplicate is just another vote)
-        // - Add the reporter's ID to the upvotes list (so they can't vote again)
+        // 2. Update Primary (Transfer votes & reporter)
         const primary = await Incident.findByIdAndUpdate(primaryId, {
             $inc: { voteCount: 1 }, 
             $addToSet: { upvotes: duplicate.reportedBy } 
@@ -133,10 +124,10 @@ export const mergeIncidents = async (req, res) => {
             return res.status(404).json({ success: false, message: "Primary incident not found" });
         }
 
-        // 3. Delete the Duplicate (Cleanup)
+        // 3. Delete Duplicate
         await Incident.findByIdAndDelete(duplicateId);
 
-        // 4. Notify Frontend (Remove the duplicate dot from map)
+        // 4. Notify Frontend
         const io = req.app.get("socketio");
         io.emit("incident-merged", { primaryId, duplicateId });
 
