@@ -5,7 +5,6 @@ const incidentSchema = new mongoose.Schema({
     type: { 
         type: String, 
         required: true,
-        // Categories must match the buttons in the mobile app
         enum: ['Fire', 'Accident', 'Medical', 'Public Safety'] 
     },
     description: { 
@@ -19,29 +18,37 @@ const incidentSchema = new mongoose.Schema({
     },
     mediaUrl: { 
         type: String, 
-        default: "" // Better to use empty string than null for React images
+        default: "" 
     },
 
     // --- ADMIN & LIFECYCLE DATA ---
     status: {
         type: String,
-        enum: ['Unverified', 'Verified','Resolved', 'Rejected'],
+        enum: ['Unverified', 'Verified', 'Resolved', 'Rejected'],
         default: 'Unverified'
     },
     severity: {
         type: String,
         enum: ['Low', 'Medium', 'High'],
-        default: 'Medium' // Default is Medium, but AI controller usually overrides this
+        default: 'Medium'
     },
     adminNotes: { 
         type: String, 
         default: "" 
     },
 
-    // --- VERIFICATION SYSTEM (For Merge & Upvotes) ---
+    // --- VERIFICATION SYSTEM ---
     upvotes: [{ 
         type: mongoose.Schema.Types.ObjectId, 
-        ref: 'User' 
+        ref: 'User',
+        default: [] // 🟢 Ensure it starts as an empty array
+    }], 
+    
+    // 🟢 ADDED: Downvotes array to track users who rejected the report
+    downvotes: [{ 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'User',
+        default: [] 
     }], 
     
     voteCount: { 
@@ -57,7 +64,6 @@ const incidentSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // 🌍 GEOSPATIAL INDEX
-// This allows you to search "Find incidents within 5km of me" in the future
 incidentSchema.index({ location: "2dsphere" });
 
 export default mongoose.model('Incident', incidentSchema);

@@ -1,5 +1,5 @@
 import Incident from "../models/Incident.js";
-
+import cloudinary from "../lib/cloudinary.js";
 // --- HELPER: AI Heuristic for Severity ---
 const determineSeverity = (type, description) => {
     const text = (type + " " + description).toLowerCase();
@@ -81,6 +81,10 @@ export const upvoteIncident = async (req, res) => {
         const incident = await Incident.findById(id);
         if (!incident) return res.status(404).json({ message: "Not found" });
 
+        // 🛡️ CRITICAL SAFETY: Ensure arrays exist to prevent "includes" error
+        if (!incident.upvotes) incident.upvotes = [];
+        if (!incident.downvotes) incident.downvotes = [];
+
         // 1. Remove from Downvotes if exists (User changed mind)
         if (incident.downvotes.includes(userId)) {
             incident.downvotes.pull(userId);
@@ -95,7 +99,7 @@ export const upvoteIncident = async (req, res) => {
         incident.upvotes.push(userId);
 
         // 4. Update Net Score
-        incident.voteCount = incident.upvotes.length - incident.downvotes.length;
+        incident.voteCount = (incident.upvotes?.length || 0) - (incident.downvotes?.length || 0);
 
         // 5. Auto-Verify Threshold
         if (incident.voteCount >= 3 && incident.status === "Unverified") {
@@ -105,36 +109,85 @@ export const upvoteIncident = async (req, res) => {
         await incident.save();
         res.status(200).json({ success: true, data: incident });
     } catch (error) {
+        console.error("Upvote Error:", error.message);
         res.status(500).json({ message: error.message });
     }
 };
 
 // 4. DOWNVOTE INCIDENT
+// export const downvoteIncident = async (req, res) => {
+//     try {
+//         const { id } = req.params;
+//         const userId = req.user._id;
+
+//         const incident = await Incident.findById(id);
+//         if (!incident) return res.status(404).json({ message: "Not found" });
+
+//         // 🛡️ CRITICAL SAFETY: Ensure arrays exist to prevent "includes" error
+//         if (!incident.upvotes) incident.upvotes = [];
+//         if (!incident.downvotes) incident.downvotes = [];
+
+//         // 1. Remove from Upvotes if exists (User changed mind)
+//         if (incident.upvotes.includes(userId)) {
+//             incident.upvotes.pull(userId);
+//         }
+
+//         // 2. Prevent double downvoting
+//         if (incident.downvotes.includes(userId)) {
+//             return res.status(400).json({ message: "Already downvoted" });
+//         }
+
+//         // 3. Add Downvote
+//         incident.downvotes.push(userId);
+
+//         // 4. Update Net Score
+//         incident.voteCount = (incident.upvotes?.length || 0) - (incident.downvotes?.length || 0);
+
+//         // 5. Auto-Reject Logic
+//         if (incident.voteCount <= -5 && incident.status === "Unverified") {
+//             incident.status = "Rejected";
+//         }
+
+//         await incident.save();
+//         res.status(200).json({ success: true, data: incident });
+//     } catch (error) {
+//         console.error("Downvote Error:", error.message);
+//         res.status(500).json({ message: error.message });
+//     }
+// };
+// 🟢 Updated DOWNVOTE INCIDENT with Admin bypass
 export const downvoteIncident = async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user._id;
+        const userRole = req.user.role; // Get role from middleware
 
         const incident = await Incident.findById(id);
-        if (!incident) return res.status(404).json({ message: "Not found" });
+        if (!incident) return res.status(404).json({ success: false, message: "Not found" });
 
-        // 1. Remove from Upvotes if exists (User changed mind)
+        // Ensure arrays exist
+        if (!incident.upvotes) incident.upvotes = [];
+        if (!incident.downvotes) incident.downvotes = [];
+
+        // 🟢 CHANGE: If Admin clicks reject, just force the status without checking "already downvoted"
+        if (userRole === 'admin') {
+            incident.status = "Rejected";
+            await incident.save();
+            return res.status(200).json({ success: true, data: incident });
+        }
+
+        // --- CITIZEN LOGIC (Keep as is) ---
         if (incident.upvotes.includes(userId)) {
             incident.upvotes.pull(userId);
         }
 
-        // 2. Prevent double downvoting
         if (incident.downvotes.includes(userId)) {
-            return res.status(400).json({ message: "Already downvoted" });
+            return res.status(400).json({ success: false, message: "Already downvoted" });
         }
 
-        // 3. Add Downvote
         incident.downvotes.push(userId);
+        incident.voteCount = (incident.upvotes?.length || 0) - (incident.downvotes?.length || 0);
 
-        // 4. Update Net Score
-        incident.voteCount = incident.upvotes.length - incident.downvotes.length;
-
-        // 5. Auto-Reject Logic (Optional: If score is -5, mark as Rejected)
         if (incident.voteCount <= -5 && incident.status === "Unverified") {
             incident.status = "Rejected";
         }
@@ -142,6 +195,6 @@ export const downvoteIncident = async (req, res) => {
         await incident.save();
         res.status(200).json({ success: true, data: incident });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
