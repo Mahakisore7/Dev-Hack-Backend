@@ -5,7 +5,7 @@ import {
     addAdminNote, 
     seedIncidents 
 } from "../controllers/adminController.js";
-import { protectRoute, verifyAdmin } from "../middleware/authMiddleware.js";
+import { protectRoute, verifyAdmin } from "../middleware/auth.js";
 
 const router = express.Router();
 
