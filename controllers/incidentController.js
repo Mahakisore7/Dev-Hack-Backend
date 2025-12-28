@@ -17,14 +17,19 @@ const determineSeverity = (type, description) => {
 // 1. Create a New Incident (Citizen Reporting)
 export const createIncident = async (req, res) => {
     try {
-        const { type, description, location, mediaUrl } = req.body;
+        const { type, description, location, image } = req.body;
 
         // Validation
         if (!type || !location || !location.lat || !location.lng) {
             return res.status(400).json({ success: false, message: "Type and Location are required" });
         }
-
-        // 🧠 AI LOGIC: Calculate Severity automatically
+        let mediaUrl=null;
+        if(image)
+        {
+            const uploadResponse = await cloudinary.uploader.upload(image);
+            mediaUrl = uploadResponse.secure_url;
+        }
+        // AI LOGIC: Calculate Severity automatically
         const calculatedSeverity = determineSeverity(type, description);
 
         const newIncident = new Incident({
@@ -34,12 +39,11 @@ export const createIncident = async (req, res) => {
             mediaUrl,
             reportedBy: req.user._id,
             status: "Unverified",     
-            severity: calculatedSeverity // <--- NOW IT IS SMART
+            severity: calculatedSeverity 
         });
 
         await newIncident.save();
 
-        // ⚡ Notify Admins
         const io = req.app.get("socketio");
         io.emit("new-incident", newIncident);
 
