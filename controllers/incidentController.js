@@ -29,7 +29,7 @@ export const createIncident = async (req, res) => {
         res.status(201).json({ 
             success: true, 
             message: "Incident Reported Successfully", 
-            incident: newIncident 
+            data: newIncident 
         });
 
     } catch (error) {
@@ -38,16 +38,16 @@ export const createIncident = async (req, res) => {
     }
 };
 
-// FOR CITIZENS: Get only recent, unverified reports for the Feed
-export const getRecentIncidents = async (req, res) => {
+// 2. GET INCIDENTS (Renamed from 'getRecentIncidents' to match routes)
+export const getIncidents = async (req, res) => {
     try {
-        // STRICT FILTER: Status must be 'Unverified'
-        const incidents = await Incident.find({ status: 'Unverified' })
+        // Fetch all incidents that are NOT resolved (Active feed)
+        // You can change filter to { status: 'Unverified' } if you only want unverified ones
+        const incidents = await Incident.find({ status: { $ne: 'Resolved' } })
             .sort({ createdAt: -1 }) // Newest first
-            .limit(10) // Limit to 10 for speed
             .populate("reportedBy", "username"); // Show reporter name
 
-        res.status(200).json({ success: true, count: incidents.length, incidents });
+        res.status(200).json({ success: true, count: incidents.length, data: incidents });
 
     } catch (error) {
         console.error("User Feed Error:", error.message);
@@ -73,22 +73,14 @@ export const upvoteIncident = async (req, res) => {
 
         // Add user to upvotes array
         incident.upvotes.push(userId);
-        
-        // Sync the voteCount
-        incident.voteCount = incident.upvotes.length;
-
-        // AUTOMATED LOGIC: If 5 people verify, mark as "Verified" automatically
-        // if (incident.voteCount >= 5 && incident.status === "Unverified") {
-        //     incident.status = "Verified";
-        // }
+        incident.voteCount = incident.upvotes.length; // Sync the voteCount
 
         await incident.save();
 
-        res.status(200).json({ success: true, message: "Upvote added", incident });
+        res.status(200).json({ success: true, message: "Upvote added", data: incident });
 
     } catch (error) {
         console.error("Upvote Error:", error.message);
         res.status(500).json({ success: false, message: "Server Error" });
     }
 };
-

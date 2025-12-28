@@ -42,15 +42,20 @@ export const signup = async (req, res) => {
     }
 };
 
+// REPLACE THE LOGIN FUNCTION IN controllers/UserController.js
+
 export const login = async (req, res) => {
-    const { username, password } = req.body;
+    // CHANGE: We now accept 'email' instead of 'username'
+    const { email, password } = req.body; 
 
     try {
-        if (!username || !password) {
+        if (!email || !password) {
             return res.status(400).json({ success: false, message: "All fields are required" });
         }
 
-        const user = await User.findOne({ username });
+        // CHANGE: Find user by email
+        const user = await User.findOne({ email });
+
         if (!user) {
             return res.status(400).json({ success: false, message: "Invalid Credentials" });
         }
@@ -77,7 +82,6 @@ export const login = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
-
 export const checkAuth = (req, res) => {
     try {
         res.status(200).json({ success: true, user: req.user });
