@@ -5,10 +5,8 @@ import http from "http";
 import { Server } from "socket.io"; 
 import { connectDB } from "./lib/db.js";
 
-// --- IMPORTS (Uncommented & Restored) ---
 import userRouter from "./routes/userRoutes.js";
-import adminRoutes from "./routes/adminRoutes.js"; // <--- RESTORED YOUR WORK
-// At the top
+import adminRoutes from "./routes/adminRoutes.js"; 
 import incidentRouter from "./routes/incidentRoutes.js";
 
 const app = express();
@@ -19,11 +17,10 @@ const io = new Server(server, {
     cors: { origin: "*" }
 });
 
-// Pass 'io' to your routes (so you can alert admins when a user reports)
 app.set("socketio", io);
 
 app.use(cors());
-app.use(express.json()); // <--- CRITICAL: He missed this! Without this, POST requests fail.
+app.use(express.json()); 
 
 // DB Connection
 connectDB(); 
