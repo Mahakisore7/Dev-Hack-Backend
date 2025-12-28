@@ -58,7 +58,7 @@ export const updateIncidentStatus = async (req, res) => {
         const { status } = req.body;
         
         // Allowed status updates
-        const validStatuses = ['Unverified', 'Verified', 'Responding', 'On Scene', 'Resolved'];
+        const validStatuses = ['Unverified', 'Verified', 'Responding', 'On Scene', 'Resolved','Rejected'];
 
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ success: false, message: "Invalid Status provided" });

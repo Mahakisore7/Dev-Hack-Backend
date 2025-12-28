@@ -19,8 +19,13 @@ const io = new Server(server, {
 
 app.set("socketio", io);
 
-app.use(cors());
-app.use(express.json()); 
+app.use(cors({
+    origin: "http://localhost:5173", // Replace with your frontend URL if different
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "token"] // Ensure "token" is allowed if you use it in headers
+}));
+app.use(express.json({limit:"4mb"})); 
 
 // DB Connection
 connectDB(); 
