@@ -217,3 +217,19 @@ ResQ-AI Backend provides:
 - High incident credibility through consensus
 - Scalable real-time architecture
 - Production-grade geospatial intelligence
+
+## 📸 Project Screenshots
+
+### 🔐 Login Screen
+![Login Screen](./Images/Login.png)
+
+### 🗺️ Full Screen Map (Admin Command Center)
+![Admin Map](./Images/FullScreen_Map.png)
+
+### 📍 Verified vs Unverified Incidents
+| Unverified Incident | Verified Incident |
+| :---: | :---: |
+| ![Unverified](./Images/Unverfied_Inc.png) | ![Verified](./Images/Verifed_Inc.png) |
+
+### 🚨 Incident Details
+![Map Popup](./Images/Map_Image.png)
