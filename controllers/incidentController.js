@@ -5,9 +5,16 @@ export const createIncident = async (req, res) => {
     try {
         const { type, description, location, mediaUrl } = req.body;
 
-        // Basic Validation
         if (!type || !location || !location.lat || !location.lng) {
             return res.status(400).json({ success: false, message: "Type and Location are required" });
+        }
+
+        let calculatedSeverity = "Medium"; 
+
+        if (["Fire", "Accident", "Medical"].includes(type)) {
+            calculatedSeverity = "High";
+        } else {
+            calculatedSeverity = "Low"; 
         }
 
         const newIncident = new Incident({
@@ -15,14 +22,13 @@ export const createIncident = async (req, res) => {
             description,
             location,
             mediaUrl,
-            reportedBy: req.user._id, // Taken from the protectRoute middleware
-            status: "Unverified",     // Default from schema
-            severity: "Medium"        // Default from schema
+            reportedBy: req.user._id, 
+            status: "Unverified",
+            severity: calculatedSeverity 
         });
 
         await newIncident.save();
 
-        // ⚡ REAL-TIME ALERT: Notify all connected Admins immediately
         const io = req.app.get("socketio");
         io.emit("new-incident", newIncident);
 
@@ -41,11 +47,9 @@ export const createIncident = async (req, res) => {
 // 2. GET INCIDENTS (Renamed from 'getRecentIncidents' to match routes)
 export const getIncidents = async (req, res) => {
     try {
-        // Fetch all incidents that are NOT resolved (Active feed)
-        // You can change filter to { status: 'Unverified' } if you only want unverified ones
         const incidents = await Incident.find({ status: { $ne: 'Resolved' } })
             .sort({ createdAt: -1 }) // Newest first
-            .populate("reportedBy", "username"); // Show reporter name
+            .populate("reportedBy", "username"); 
 
         res.status(200).json({ success: true, count: incidents.length, data: incidents });
 
@@ -66,7 +70,6 @@ export const upvoteIncident = async (req, res) => {
             return res.status(404).json({ success: false, message: "Incident not found" });
         }
 
-        // Check if user has already upvoted
         if (incident.upvotes.includes(userId)) {
             return res.status(400).json({ success: false, message: "You have already verified this incident" });
         }
