@@ -25,8 +25,7 @@ const incidentSchema = new mongoose.Schema({
     // --- ADMIN & LIFECYCLE DATA ---
     status: {
         type: String,
-        // ⚠️ CRITICAL: Added 'Rejected' to match your Frontend Tabs
-        enum: ['Unverified', 'Verified', 'Responding', 'On Scene', 'Resolved', 'Rejected'],
+        enum: ['Unverified', 'Verified','Resolved', 'Rejected'],
         default: 'Unverified'
     },
     severity: {

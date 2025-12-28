@@ -1,18 +1,25 @@
 import Incident from "../models/Incident.js";
 
-// 1. ADMIN FEED (Smart Priority Sorting)
-// Logic: Sorts by Severity (High first) -> then by Vote Count -> then by Newest
+// ==========================================
+// 1. GET ADMIN FEED (Handles Home & Tabs)
+// ==========================================
 export const getAdminFeed = async (req, res) => {
     try {
         const { status, type } = req.query;
         let filter = {};
 
-        // Allow Admin to filter by status or type if they want
-        if (status) filter.status = status;
+        // 🟢 LOGIC: 
+        // If status is "All", we want everything (empty filter).
+        // If status is "Unverified", "Resolved", etc., we filter by that specific status.
+        if (status && status !== "All") {
+            filter.status = status;
+        }
+
+        // Optional: Filter by Type (Fire, Medical) if needed later
         if (type) filter.type = type;
 
         const incidents = await Incident.aggregate([
-            { $match: filter },
+            { $match: filter }, // Apply the filter (All vs Specific Status)
             {
                 $addFields: {
                     severityScore: {
@@ -27,94 +34,100 @@ export const getAdminFeed = async (req, res) => {
                     }
                 }
             },
-            // Sort: Highest Priority -> Most Verified -> Most Recent
+            // 🟢 SORTING ORDER:
+            // 1. High Severity First
+            // 2. High Vote Count Second
+            // 3. Most Recently Created Third (Newest on top)
             { $sort: { severityScore: -1, voteCount: -1, createdAt: -1 } }
         ]);
 
         res.status(200).json({ success: true, count: incidents.length, data: incidents });
+
     } catch (error) {
         console.error("Admin Feed Error:", error.message);
         res.status(500).json({ success: false, message: "Server Error" });
     }
 };
 
-// 2. UPDATE INCIDENT (Unified Status & Notes)
-// Handles "Mark as Resolved", "Reject", and "Add Note" all in one.
+// ==========================================
+// 2. UPDATE STATUS (Admin Edit Feature)
+// ==========================================
 export const updateIncidentStatus = async (req, res) => {
     try {
         const { id } = req.params;
-        const { status, adminNotes } = req.body;
-
-        // Construct update object dynamically (only update what is sent)
-        const updates = {};
+        const { status } = req.body;
         
-        // Validate Status if provided
-        if (status) {
-            const validStatuses = ['Unverified', 'Verified', 'Responding', 'On Scene', 'Resolved', 'Rejected'];
-            if (!validStatuses.includes(status)) {
-                return res.status(400).json({ success: false, message: "Invalid Status provided" });
-            }
-            updates.status = status;
+        // Allowed status updates
+        const validStatuses = ['Unverified', 'Verified', 'Responding', 'On Scene', 'Resolved'];
+
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ success: false, message: "Invalid Status provided" });
         }
 
-        // Add Notes if provided
-        if (adminNotes !== undefined) {
-            updates.adminNotes = adminNotes;
-        }
-
-        const updatedIncident = await Incident.findByIdAndUpdate(
+        // Find and update the incident
+        const incident = await Incident.findByIdAndUpdate(
             id,
-            { $set: updates },
-            { new: true } // Return the updated document
+            { status: status },
+            { new: true } // Return the updated version immediately
         );
 
-        if (!updatedIncident) {
+        if (!incident) {
             return res.status(404).json({ success: false, message: "Incident not found" });
         }
 
-        // ⚡ Real-time update: Tell everyone (Dashboards & Mobile Apps)
+        // ⚡ REAL-TIME UPDATE: Tell Frontend to move this card to the new tab
         const io = req.app.get("socketio");
-        io.emit("incident-updated", updatedIncident);
+        if (io) {
+            io.emit("incident-updated", incident);
+        }
 
-        res.status(200).json({ success: true, message: "Incident Updated", data: updatedIncident });
+        res.status(200).json({ success: true, message: `Status updated to ${status}`, data: incident });
 
     } catch (error) {
-        console.error("Update Error:", error.message);
+        console.error("Update Status Error:", error.message);
         res.status(500).json({ success: false, message: "Server Error" });
     }
 };
 
-// 3. SEED DATA (Utility for Testing)
-export const seedIncidents = async (req, res) => {
+// ==========================================
+// 3. ADD ADMIN NOTE (Internal Comments)
+// ==========================================
+export const addAdminNote = async (req, res) => {
     try {
-        // Only run if we are the admin reporting
-        await Incident.create([
-            { type: 'Fire', severity: 'High', location: { lat: 11.01, lng: 76.95, address: "Main Lab" }, description: "Lab fire", reportedBy: req.user._id, status: "Unverified" },
-            { type: 'Accident', severity: 'Medium', location: { lat: 11.02, lng: 76.96, address: "Gate 1" }, description: "Bike crash", reportedBy: req.user._id, status: "Unverified" },
-            { type: 'Public Safety', severity: 'Low', location: { lat: 11.03, lng: 76.97, address: "Hostel" }, description: "Street light broken", reportedBy: req.user._id, status: "Unverified" }
-        ]);
-        res.status(201).json({ success: true, message: "Test Incidents Created!" });
+        const { id } = req.params;
+        const { adminNotes } = req.body;
+
+        const incident = await Incident.findByIdAndUpdate(
+            id,
+            { adminNotes: adminNotes },
+            { new: true }
+        );
+
+        if (!incident) {
+            return res.status(404).json({ success: false, message: "Incident not found" });
+        }
+
+        res.status(200).json({ success: true, message: "Note Added", data: incident });
+
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ success: false, message: "Server Error" });
     }
 };
 
-// 4. MERGE DUPLICATES (The "Winning Feature")
+// ==========================================
+// 4. MERGE DUPLICATES (Clean up Feed)
+// ==========================================
 export const mergeIncidents = async (req, res) => {
     try {
         const { primaryId, duplicateId } = req.body;
 
-        if (!primaryId || !duplicateId) {
-            return res.status(400).json({ success: false, message: "Both IDs required" });
-        }
-
-        // 1. Get duplicate data
+        // Check if duplicate exists
         const duplicate = await Incident.findById(duplicateId);
         if (!duplicate) {
             return res.status(404).json({ success: false, message: "Duplicate incident not found" });
         }
 
-        // 2. Update Primary (Transfer votes & reporter)
+        // Update Primary: Add votes + Add reporter to upvoters
         const primary = await Incident.findByIdAndUpdate(primaryId, {
             $inc: { voteCount: 1 }, 
             $addToSet: { upvotes: duplicate.reportedBy } 
@@ -124,12 +137,14 @@ export const mergeIncidents = async (req, res) => {
             return res.status(404).json({ success: false, message: "Primary incident not found" });
         }
 
-        // 3. Delete Duplicate
+        // Delete the Duplicate
         await Incident.findByIdAndDelete(duplicateId);
 
-        // 4. Notify Frontend
+        // Notify Frontend to remove the duplicate dot
         const io = req.app.get("socketio");
-        io.emit("incident-merged", { primaryId, duplicateId });
+        if (io) {
+            io.emit("incident-merged", { primaryId, duplicateId });
+        }
 
         res.status(200).json({ success: true, message: "Incidents Merged Successfully", data: primary });
 
@@ -138,3 +153,20 @@ export const mergeIncidents = async (req, res) => {
         res.status(500).json({ success: false, message: "Server Error" });
     }
 };
+
+// // ==========================================
+// // 5. SEED DATA (For Testing)
+// // ==========================================
+// export const seedIncidents = async (req, res) => {
+//     try {
+//         // Create 3 test incidents with different statuses to test your tabs
+//         await Incident.create([
+//             { type: 'Fire', severity: 'High', location: { lat: 11.01, lng: 76.95, address: "Main Lab" }, description: "Lab fire", reportedBy: req.user._id, status: 'Unverified' },
+//             { type: 'Accident', severity: 'Medium', location: { lat: 11.02, lng: 76.96, address: "Gate 1" }, description: "Bike crash", reportedBy: req.user._id, status: 'Unverified' },
+//             { type: 'Public Safety', severity: 'Low', location: { lat: 11.03, lng: 76.97, address: "Hostel" }, description: "Street light broken", reportedBy: req.user._id, status: 'Resolved' }
+//         ]);
+//         res.status(201).json({ success: true, message: "Test Incidents Created!" });
+//     } catch (error) {
+//         res.status(500).json({ message: error.message });
+//     }
+// };
