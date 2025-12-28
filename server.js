@@ -8,6 +8,8 @@ import { connectDB } from "./lib/db.js";
 // --- IMPORTS (Uncommented & Restored) ---
 import userRouter from "./routes/userRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js"; // <--- RESTORED YOUR WORK
+// At the top
+import incidentRouter from "./routes/incidentRoutes.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -34,6 +36,7 @@ app.use("/api/status", (req, res) => {
 // --- MOUNT ROUTES ---
 app.use("/api/auth", userRouter);  // Users Login/Signup
 app.use("/api/admin", adminRoutes); // Admin Dashboard Logic
+app.use("/api/incidents", incidentRouter);
 
 // Socket.io Connection Logic
 io.on("connection", (socket) => {
