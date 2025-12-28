@@ -3,7 +3,8 @@ import {
     getAdminFeed, 
     updateIncidentStatus, 
     addAdminNote, 
-    seedIncidents 
+    seedIncidents,
+    mergeIncidents
 } from "../controllers/adminController.js";
 import { protectRoute, verifyAdmin } from "../middleware/authMiddleware.js";
 
@@ -19,6 +20,7 @@ router.get("/feed", getAdminFeed);
 // 2. Actions
 router.patch("/:id/status", updateIncidentStatus);
 router.patch("/:id/notes", addAdminNote);
+router.post("/merge", mergeIncidents);
 
 // 3. Utility
 router.get("/seed", seedIncidents);

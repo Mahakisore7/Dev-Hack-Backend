@@ -108,3 +108,42 @@ export const seedIncidents = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+// 5. MERGE DUPLICATES (The "Winning Feature")
+// Merges Incident B (Duplicate) into Incident A (Primary)
+export const mergeIncidents = async (req, res) => {
+    try {
+        const { primaryId, duplicateId } = req.body;
+
+        // 1. Get the duplicate incident to extract useful data
+        const duplicate = await Incident.findById(duplicateId);
+        if (!duplicate) {
+            return res.status(404).json({ success: false, message: "Duplicate incident not found" });
+        }
+
+        // 2. Update Primary: 
+        // - Add +1 vote count (simulating the duplicate is just another vote)
+        // - Add the reporter's ID to the upvotes list (so they can't vote again)
+        const primary = await Incident.findByIdAndUpdate(primaryId, {
+            $inc: { voteCount: 1 }, 
+            $addToSet: { upvotes: duplicate.reportedBy } 
+        }, { new: true });
+
+        if (!primary) {
+            return res.status(404).json({ success: false, message: "Primary incident not found" });
+        }
+
+        // 3. Delete the Duplicate (Cleanup)
+        await Incident.findByIdAndDelete(duplicateId);
+
+        // 4. Notify Frontend (Remove the duplicate dot from map)
+        const io = req.app.get("socketio");
+        io.emit("incident-merged", { primaryId, duplicateId });
+
+        res.status(200).json({ success: true, message: "Incidents Merged Successfully", data: primary });
+
+    } catch (error) {
+        console.error("Merge Error:", error.message);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
