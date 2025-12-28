@@ -1,10 +1,11 @@
 import express from 'express';
 import Incident from '../models/Incident.js'; // Note the .js extension!
+import { protectRoute, verifyAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // 1. GET FEED
-router.get('/feed', async (req, res) => {
+router.get('/feed',protectRoute,verifyAdmin, async (req, res) => {
     try {
         const { status, type } = req.query;
         let filter = {};
@@ -38,7 +39,7 @@ router.get('/feed', async (req, res) => {
 });
 
 // 2. UPDATE STATUS
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status',protectRoute,verifyAdmin, async (req, res) => {
     try {
         const { status } = req.body;
         const validStatuses = ['Unverified', 'Verified', 'Responding', 'On Scene', 'Resolved'];
